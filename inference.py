@@ -15,6 +15,7 @@ Generation Pipeline:
 import torch
 import torch.nn.functional as F
 from model.lamma import LLaMA, ModelArgs
+from dataset import CharTokenizer
 
 
 def sample_top_p_top_k(logits: torch.Tensor, temperature: float = 0.8, top_p: float = 0.9, top_k: int = 50) -> torch.Tensor:
@@ -104,33 +105,38 @@ def generate(model: LLaMA, prompt_tokens: torch.Tensor, max_gen_len: int = 15, t
 
 
 if __name__ == "__main__":
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    print(f"Using device: {device}")
+    
+     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+     print(f"추론 디바이스: {device}")
 
-    # Model architectural configuration
-    args = ModelArgs(
-        dim=64,
-        n_layers=4,
-        n_heads=4,
-        vocab_size=1000,
-        max_seq_len=64
-    )
-    model = LLaMA(args).to(device)
+    # call the checkpoint and load the model
+     checkpoint_path = "checkpoint.pt"
+     checkpoint = torch.load(checkpoint_path, map_location=device)
+     print(f"'{checkpoint_path}' 불러오기 완료!")
 
-    # Prompt specification: Synthetic sequence of 3 discrete tokens (Batch=1, Seq_Len=3)
-    prompt = torch.tensor([[42, 108, 9]], device=device)
-    print("초기 프롬프트 토큰:", prompt.tolist())
+    # 2. Restore the tokenizer using the character set saved in the checkpoint
+     chars = checkpoint["chars"]
+     tokenizer = CharTokenizer("".join(chars))
 
-    # Execute autoregressive sequence expansion
-    generated = generate(
+    # 3. Restore the model using the original training configuration and load the trained weights
+     args = checkpoint["args"]
+     args.max_batch_size = 1  # 추론용 단일 배치 설정
+     model = LLaMA(args).to(device)
+     model.load_state_dict(checkpoint["model_state_dict"])
+     model.eval()
+
+    # 4. Input the actual string prompt and generate text using KV Cache
+     prompt_text = "Machine "
+     print(f"\n입력 프롬프트: '{prompt_text}'")
+
+     generated_text = generate(
         model=model,
-        prompt_tokens=prompt,
-        max_gen_len=10,
-        temperature=0.7,
+        prompt_tokens=tokenizer.encode(prompt_text).unsqueeze(0).to(device),
+        max_gen_len=60,
+        temperature=0.8,
         top_p=0.9,
-        top_k=40
+        top_k=50,
     )
 
-    print("생성 완료 토큰 시퀀스:", generated.tolist())
-    print("추가로 생성된 토큰 개수:", generated.shape[1] - prompt.shape[1])
-    print("Day 7 자기회귀 텍스트 생성 파이프라인 검증 성공!")
+     print("\n--- 생성 결과 ---")
+     print(generated_text)

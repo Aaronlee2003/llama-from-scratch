@@ -31,4 +31,17 @@ class CharTokenizer:
     #iterartiion each iterger  idx2char  combination to reconstruct the original text
   
         
-        
+    @staticmethod
+    def get_batch(
+        data: torch.Tensor, batch_size: int, block_size: int, device: torch.device
+    ):
+    # 1. pick the random batch_size count
+     ix = torch.randint(len(data) - block_size, (batch_size,))#limited the index size to ensure we can slice block_size length without overflow
+
+    # 2. from start indext, slice block_size length to form batch (Stack)
+     x = torch.stack([data[i : i + block_size] for i in ix])#model input sequence size is batch_size x block_size
+     y = torch.stack([data[i + 1 : i + block_size + 1] for i in ix])
+     #autogressive target: y is the next token sequence for x
+     #if x is t times token  y is the next token sequence for each position in x
+    # 3. move tensors to the device (MPS / GPU / CPU) for model computation
+     return x.to(device), y.to(device)   

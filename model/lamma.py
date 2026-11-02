@@ -52,16 +52,20 @@ class LLaMA(nn.Module):
         self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
 
         # 2. Sequential Transformer Blocks: Stacked decoder layers
-        self.layers = nn.ModuleList([
-            TransformerBlock(
-                dim=args.dim,
-                n_heads=args.n_heads,
-                multiple_of=args.multiple_of,
-                max_batch_size=args.max_batch_size,
-                max_seq_len=args.max_seq_len,
-            )
-            for _ in range(args.n_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                TransformerBlock(
+                    dim=args.dim,
+                    n_heads=args.n_heads,
+                    multiple_of=args.multiple_of,
+                    max_batch_size=args.max_batch_size,  # <-- [추가]
+                    max_seq_len=args.max_seq_len,        # <-- [추가]
+                )
+                for _ in range(args.n_layers)
+            ]
+        )
+        # Remove this redundant line as the list comprehension already handles layer creation
+        
 
         # 3. Final Pre-Head Normalization: Stabilizes variance after multi-layer residual accumulation
         self.norm = RMSNorm(dim=args.dim)
