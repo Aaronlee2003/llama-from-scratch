@@ -8,3 +8,5 @@ venv/
 .env.*
 *.pt
 *.pth
+input.txt
+*.txt

@@ -2,8 +2,12 @@
 Day 10: Autoregressive Text Generation using KV Cache.
 Leverages pre-allocated KV Cache and start_pos indexing to generate tokens in O(1) compute per step.
 """
-
+#day 11   decoding way  tiny shakespeare for pretraing  expansion 
+# inference upgrade temperature sampling and top-k sampling
+# mathmathical logic logtics'=logit/t if  t<1.0 coreect word choose and t>1.0 distribution flatten  so can choose more creative word
+#top-p smapling  After sorting in order of probability, keep only the top candidate groups with a cumulative probability of p (e.g., 0.9), discard the rest as -∞, and then torch.Sample using multinomial.
 import torch
+from torch.cuda import temperature
 from dataset import CharTokenizer
 from model.lamma import LLaMA, ModelArgs
 
@@ -54,6 +58,22 @@ def generate(
         generated.append(next_token)
 
     return tokenizer.decode(generated)
+def sample_top_p(logits: torch.Tensor, temperature: float = 0.8, top_p: float = 0.9) -> int:
+    # temperature scaling: l and top logtit flitering and probablity token sampling
+     logits = logits / temperature #grouping logits by temperature for sampling
+     probs = torch.softmax(logits, dim=-1)
+     sorted_probs, sorted_indices = torch.sort(probs, descending=True)# sort probabilities for top-p filtering and can restore original order later
+     cumulative_probs = torch.cumsum(sorted_probs, dim=-1)#sum from highest probability to current token
+     sorted_indices_to_remove = cumulative_probs > top_p# if top-p is 0.8 if total summurize is 0.85 include third word it must be include
+     #if we didnt shift  and apply the mask  this value deleted
+     sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()# this make lower probablity token make 0 tottal probability sum is under 1
+     sorted_indices_to_remove[..., 0] = False
+     sorted_probs[sorted_indices_to_remove] = 0.0
+     sorted_probs = sorted_probs / torch.sum(sorted_probs, dim=-1, keepdim=True)
+     next_token_sorted_idx = torch.multinomial(sorted_probs, num_samples=1)#just pick one token based on filtered probabilities
+     next_token = torch.gather(sorted_indices, -1, next_token_sorted_idx)
+
+     return next_token.item()
 
 
 if __name__ == "__main__":

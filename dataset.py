@@ -31,8 +31,7 @@ class CharTokenizer:
     #iterartiion each iterger  idx2char  combination to reconstruct the original text
   
         
-    @staticmethod
-    def get_batch(
+def get_batch(
         data: torch.Tensor, batch_size: int, block_size: int, device: torch.device
     ):
     # 1. pick the random batch_size count
