@@ -7,7 +7,7 @@ Leverages pre-allocated KV Cache and start_pos indexing to generate tokens in O(
 # mathmathical logic logtics'=logit/t if  t<1.0 coreect word choose and t>1.0 distribution flatten  so can choose more creative word
 #top-p smapling  After sorting in order of probability, keep only the top candidate groups with a cumulative probability of p (e.g., 0.9), discard the rest as -∞, and then torch.Sample using multinomial.
 import torch
-from torch.cuda import temperature
+
 from dataset import CharTokenizer
 from model.lamma import LLaMA, ModelArgs
 
@@ -39,7 +39,7 @@ def generate(
     logits = model(x_prompt, start_pos=0, use_cache=True)
 
     # 프롬프트의 마지막 토큰 위치에서 다음 토큰 1개 결정 (Greedy)
-    next_token = torch.argmax(logits[:, -1, :], dim=-1).item()
+    next_token = sample_top_p(logits[:, -1, :], temperature=0.7, top_p=0.9)
     generated.append(next_token)
 
     # -------------------------------------------------------------
@@ -78,32 +78,18 @@ def sample_top_p(logits: torch.Tensor, temperature: float = 0.8, top_p: float = 
 
 if __name__ == "__main__":
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    print(f"추론 디바이스: {device}")
 
-    # 학습용 말뭉치 및 토크나이저 설정
-    corpus = "Machine learning research engineering requires deep mathematical intuition."
-    tokenizer = CharTokenizer(corpus)
+    # 1. train.py가 저장한 파일 불러오기
+    checkpoint = torch.load("checkpoint.pt", map_location=device)
+    args = checkpoint["args"]
+    chars = checkpoint["chars"]
 
-    # 모델 생성 (Day 9에서 학습한 가중치를 쓰거나 테스트용으로 초기화)
-    args = ModelArgs(
-        dim=128,
-        n_layers=4,
-        n_heads=4,
-        vocab_size=tokenizer.vocab_size,
-        max_seq_len=256,
-        max_batch_size=1,
-    )
+    # 2. 토크나이저 및 모델 가중치 복원
+    tokenizer = CharTokenizer("".join(chars))
+    args.max_batch_size = 1  # 1개씩 생성하므로
     model = LLaMA(args).to(device)
+    model.load_state_dict(checkpoint["model_state_dict"])
 
-    # 추론 테스트
-    prompt_text = "Machine"
-    print(f"입력 프롬프트: '{prompt_text}'")
-
-    generated_text = generate(
-        model=model,
-        prompt=prompt_text,
-        tokenizer=tokenizer,
-        max_gen_len=40,
-        device=device,
-    )
-    print(f"생성 결과: {generated_text}")
+    # 3. 생성 호출
+    output = generate(model, "KING:", tokenizer, max_gen_len=200, device=device)
+    print(output)
